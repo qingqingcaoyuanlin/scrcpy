@@ -47,22 +47,26 @@ jobs:
           architecture: x64
 
       - name: Install Android SDK Command-line Tools
-        shell: bash
+        shell: pwsh
         run: |
           # 创建Android SDK目录
-          mkdir -p "$ANDROID_HOME/cmdline-tools"
-          cd "$ANDROID_HOME/cmdline-tools"
+          New-Item -ItemType Directory -Force -Path "$env:ANDROID_HOME/cmdline-tools"
+          Set-Location "$env:ANDROID_HOME/cmdline-tools"
           
           # 下载最新的命令行工具
-          wget https://dl.google.com/android/repository/commandlinetools-win-10406996_latest.zip -O cmdline-tools.zip
-          unzip cmdline-tools.zip
-          mv cmdline-tools latest
+          $url = "https://dl.google.com/android/repository/commandlinetools-win-10406996_latest.zip"
+          $output = "cmdline-tools.zip"
+          Invoke-WebRequest -Uri $url -OutFile $output
+          
+          # 解压文件
+          Expand-Archive -Path $output -DestinationPath . -Force
+          Move-Item -Path "cmdline-tools" -Destination "latest" -Force
           
           # 接受许可证
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses
+          & "$env:ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager.bat" --licenses <<< "y"
           
           # 安装所需组件
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;25.2.9519653" "platform-tools" "build-tools;33.0.2"
+          & "$env:ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager.bat" "ndk;25.2.9519653" "platform-tools" "build-tools;33.0.2"
         env:
           ANDROID_HOME: ${{ runner.tool_cache }}/android-sdk
 
