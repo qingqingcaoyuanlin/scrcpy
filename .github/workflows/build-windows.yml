@@ -1,10 +1,10 @@
 name: Build scrcpy for Windows
 
 on:
-  workflow_dispatch:  # 允许手动触发编译
+  workflow_dispatch:
   push:
     branches:
-      - master  # 也可以设置为其他分支
+      - master
 
 jobs:
   build:
@@ -47,7 +47,10 @@ jobs:
       - name: Install Android SDK
         uses: malinskiy/action-android/install-sdk@release/0.1.4
         with:
-          ndk: 25.2.9519653  # 指定NDK版本
+          components: |  # 指定需要安装的组件
+            ndk;25.2.9519653
+            platform-tools
+            build-tools;33.0.2
 
       - name: Build server
         shell: msys2 {0}
