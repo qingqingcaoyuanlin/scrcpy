@@ -47,10 +47,11 @@ jobs:
       - name: Install Android SDK
         uses: malinskiy/action-android/install-sdk@release/0.1.4
         with:
-          components: |  # 指定需要安装的组件
-            ndk;25.2.9519653
-            platform-tools
-            build-tools;33.0.2
+          acceptLicense: 'yes'
+          sdkCmd: |  # 使用 sdkCmd 安装所需组件
+            sdkmanager "ndk;25.2.9519653"
+            sdkmanager "platform-tools"
+            sdkmanager "build-tools;33.0.2"
 
       - name: Build server
         shell: msys2 {0}
