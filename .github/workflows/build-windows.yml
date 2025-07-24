@@ -63,10 +63,10 @@ jobs:
           Move-Item -Path "cmdline-tools" -Destination "latest" -Force
           
           # 接受许可证
-          & "$env:ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager.bat" --licenses <<< "y"
+          Write-Output "y" | & "$env:ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager.bat" --licenses
           
           # 安装所需组件
-          & "$env:ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager.bat" "ndk;25.2.9519653" "platform-tools" "build-tools;33.0.2"
+          Write-Output "y" | & "$env:ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager.bat" "ndk;25.2.9519653" "platform-tools" "build-tools;33.0.2"
         env:
           ANDROID_HOME: ${{ runner.tool_cache }}/android-sdk
 
