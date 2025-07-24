@@ -43,15 +43,28 @@ jobs:
           java-version: '11'
           distribution: 'temurin'
           cache: 'gradle'
+          java-package: jdk
+          architecture: x64
 
-      - name: Install Android SDK
-        uses: malinskiy/action-android/install-sdk@release/0.1.4
-        with:
-          acceptLicense: 'yes'
-          sdkCmd: |  # 使用 sdkCmd 安装所需组件
-            sdkmanager "ndk;25.2.9519653"
-            sdkmanager "platform-tools"
-            sdkmanager "build-tools;33.0.2"
+      - name: Install Android SDK Command-line Tools
+        shell: bash
+        run: |
+          # 创建Android SDK目录
+          mkdir -p "$ANDROID_HOME/cmdline-tools"
+          cd "$ANDROID_HOME/cmdline-tools"
+          
+          # 下载最新的命令行工具
+          wget https://dl.google.com/android/repository/commandlinetools-win-10406996_latest.zip -O cmdline-tools.zip
+          unzip cmdline-tools.zip
+          mv cmdline-tools latest
+          
+          # 接受许可证
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses
+          
+          # 安装所需组件
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;25.2.9519653" "platform-tools" "build-tools;33.0.2"
+        env:
+          ANDROID_HOME: ${{ runner.tool_cache }}/android-sdk
 
       - name: Build server
         shell: msys2 {0}
@@ -59,14 +72,18 @@ jobs:
           cd app
           ./gradlew assembleDebug
           cd ..
+        env:
+          ANDROID_HOME: ${{ runner.tool_cache }}/android-sdk
 
       - name: Build client
         shell: msys2 {0}
         run: |
           export PATH="/mingw64/bin:$PATH"
-          export ANDROID_NDK_HOME="$ANDROID_SDK_ROOT/ndk/25.2.9519653"
+          export ANDROID_NDK_HOME="${{ runner.tool_cache }}/android-sdk/ndk/25.2.9519653"
           meson setup build --cross-file scripts/mingw64.txt --buildtype=release
           ninja -C build
+        env:
+          ANDROID_HOME: ${{ runner.tool_cache }}/android-sdk
 
       - name: Collect artifacts
         shell: msys2 {0}
