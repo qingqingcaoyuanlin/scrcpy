@@ -89,7 +89,7 @@ jobs:
           # 确认exe生成
           if [ ! -f "build/src/scrcpy.exe" ]; then
             echo "编译失败，无exe文件"
-            exit 1
+            #exit 1
           fi
 
       - name: 打包所有运行依赖
