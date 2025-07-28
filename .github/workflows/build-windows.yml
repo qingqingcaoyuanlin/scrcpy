@@ -1,10 +1,6 @@
-name: Build scrcpy v3.3.1
+name: Build scrcpy v3.3.1 (Windows Client Only)
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
   workflow_dispatch:
 
 jobs:
@@ -12,7 +8,7 @@ jobs:
     runs-on: windows-latest
     
     steps:
-      - name: 安装MSYS2和编译工具
+      - name: 安装 MSYS2 环境
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
@@ -27,7 +23,7 @@ jobs:
             mingw-w64-x86_64-pkgconf
             mingw-w64-x86_64-SDL2
 
-      - name: 验证工具是否安装成功
+      - name: 验证依赖安装
         shell: msys2 {0}
         run: |
           meson --version
@@ -35,43 +31,61 @@ jobs:
           gcc --version
           pkg-config --modversion libusb-1.0
           pkg-config --modversion sdl2
+          pkg-config --modversion libavcodec
 
-      - name: 拉取scrcpy v3.3.1源码
+      - name: 拉取源码并排除服务器目录
         shell: msys2 {0}
         run: |
           git clone https://github.com/Genymobile/scrcpy.git
           cd scrcpy
           git checkout v3.3.1
+          
+          # 关键修改：删除服务器目录，避免构建系统引用
+          rm -rf server
+
+      - name: 修改 meson.build 以排除服务器
+        shell: msys2 {0}
+        run: |
+          cd scrcpy
+          
+          # 修改主meson.build文件，移除对服务器的引用
+          sed -i 's/subdir('server')/#subdir('server')/g' meson.build
+          
+          # 确保只编译客户端
+          echo "build_server = false" >> config.h
+          
+          # 验证修改
+          cat meson.build
+          cat config.h
 
       - name: 配置编译选项（仅客户端）
         shell: msys2 {0}
         run: |
           cd scrcpy
-          # 关键修改：移除 -Dbackend=none，改用官方禁用服务器的选项
           meson setup build --buildtype=release \
-            -Dprebuilt_server=false \   # 不使用预编译服务器
-            -Dwith_ffmpeg=enabled \     # 启用FFmpeg
-            -Dwith_libusb=enabled \     # 启用libusb
-            -Dwith_sdl=enabled \        # 启用SDL（v3.3.1依赖SDL显示窗口）
-            -Dwith_systemd=disabled     # 禁用systemd（Windows不需要）
+            -Dprebuilt_server=false \
+            -Dwith_ffmpeg=enabled \
+            -Dwith_libusb=enabled \
+            -Dwith_sdl=enabled \
+            -Dwith_systemd=disabled
 
-      - name: 编译scrcpy.exe
+      - name: 编译 scrcpy.exe
         shell: msys2 {0}
         run: |
           cd scrcpy
-          ninja -C build  # 使用ninja后端编译
+          ninja -C build
 
       - name: 验证编译结果
         shell: msys2 {0}
         run: |
           cd scrcpy/build/src
           file scrcpy.exe
-          ldd scrcpy.exe  # 检查依赖是否完整
+          ldd scrcpy.exe
 
       - name: 上传产物
         uses: actions/upload-artifact@v4
         with:
-          name: scrcpy-v3.3.1
+          name: scrcpy-v3.3.1-windows
           path: |
             scrcpy/build/src/scrcpy.exe
             C:/msys64/mingw64/bin/libusb-1.0.dll
@@ -79,4 +93,4 @@ jobs:
             C:/msys64/mingw64/bin/avformat-61.dll
             C:/msys64/mingw64/bin/avutil-59.dll
             C:/msys64/mingw64/bin/swscale-8.dll
-            C:/msys64/mingw64/bin/SDL2.dll  # 补充SDL2依赖
+            C:/msys64/mingw64/bin/SDL2.dll
