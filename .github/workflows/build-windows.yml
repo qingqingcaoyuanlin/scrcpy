@@ -1,14 +1,13 @@
-name: Build scrcpy v3.3.1 Client Only
+name: 纯净编译 scrcpy v3.3.1 客户端
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:  # 仅手动触发，避免自动浪费时间
 
 jobs:
-  build-windows:
+  build:
     runs-on: windows-latest
-    
     steps:
-      - name: 安装MSYS2和编译工具
+      - name: 安装 MSYS2 环境（官方推荐）
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
@@ -23,77 +22,62 @@ jobs:
             mingw-w64-x86_64-pkgconf
             mingw-w64-x86_64-SDL2
 
-      - name: 验证工具是否安装成功
-        shell: msys2 {0}
-        run: |
-          meson --version
-          ninja --version
-          gcc --version
-          pkg-config --modversion libusb-1.0
-          pkg-config --modversion sdl2
-
-      - name: 拉取scrcpy v3.3.1源码
+      - name: 拉取源码并彻底删除服务器目录
         shell: msys2 {0}
         run: |
           git clone https://github.com/Genymobile/scrcpy.git
           cd scrcpy
-          git checkout v3.3.1
+          git checkout v3.3.1  # 锁定版本
+          rm -rf server/  # 物理删除服务器目录，永绝后患
+          # 确认服务器目录已删除
+          if [ -d "server" ]; then echo "服务器目录未删除，失败！"; exit 1; fi
 
-      - name: 创建仅包含客户端的工作目录
+      - name: 修补主配置文件（移除服务器引用）
         shell: msys2 {0}
         run: |
           cd scrcpy
-          
-          # 创建新的客户端目录
-          mkdir -p client_only
-          cp -r app client_only/
-          cp -r src client_only/
-          cp -r deps client_only/
-          cp meson.build client_only/
-          cp LICENSE client_only/
-          cp config.h client_only/
-          
-          # 修改客户端的meson.build文件
-          cd client_only
-          
-          # 删除对server目录的引用
-          sed -i '/subdir('server')/d' meson.build
-          
-          # 验证修改
-          cat meson.build
+          # 从主meson.build中删除所有关于server的配置
+          sed -i '/subdir.*server/d' meson.build
+          # 验证修改（确保没有server相关内容）
+          if grep -q "server" meson.build; then echo "配置文件修补失败"; exit 1; fi
 
-      - name: 配置并编译客户端
+      - name: 配置编译（仅客户端必需选项）
         shell: msys2 {0}
         run: |
-          cd scrcpy/client_only
-          
-          # 使用兼容v3.3.1的选项
+          cd scrcpy
           meson setup build --buildtype=release \
-            -Dffmpeg=enabled \
-            -Dlibusb=enabled \
-            -Dsdl=enabled \
-            -Dsystemd=disabled \
-            -Dprebuilt_server=false
-          
-          # 执行编译
-          ninja -C build
+            -Dffmpeg=enabled \    # 仅保留客户端必需的FFmpeg依赖
+            -Dlibusb=enabled \    # 仅保留USB连接依赖
+            -Dsdl=enabled \       # 仅保留窗口显示依赖
+            -Dsystemd=disabled    # Windows无需systemd
 
-      - name: 验证编译结果
+      - name: 编译客户端
         shell: msys2 {0}
         run: |
-          cd scrcpy/client_only/build/src
-          file scrcpy.exe
-          ldd scrcpy.exe
+          cd scrcpy
+          ninja -C build
+          # 确认exe生成
+          if [ ! -f "build/src/scrcpy.exe" ]; then echo "编译失败，无exe文件"; exit 1; fi
 
-      - name: 上传产物
+      - name: 打包所有运行依赖
+        shell: msys2 {0}
+        run: |
+          # 创建输出目录
+          mkdir -p output
+          # 复制客户端exe
+          cp scrcpy/build/src/scrcpy.exe output/
+          # 复制必需的DLL（根据官方运行时依赖）
+          cp /mingw64/bin/libusb-1.0.dll output/
+          cp /mingw64/bin/avcodec-61.dll output/
+          cp /mingw64/bin/avformat-61.dll output/
+          cp /mingw64/bin/avutil-59.dll output/
+          cp /mingw64/bin/swscale-8.dll output/
+          cp /mingw64/bin/SDL2.dll output/
+          # 确认所有文件存在
+          ls -l output/
+
+      - name: 上传最终产物
         uses: actions/upload-artifact@v4
         with:
-          name: scrcpy-v3.3.1-client-only
-          path: |
-            scrcpy/client_only/build/src/scrcpy.exe
-            C:/msys64/mingw64/bin/libusb-1.0.dll
-            C:/msys64/mingw64/bin/avcodec-61.dll
-            C:/msys64/mingw64/bin/avformat-61.dll
-            C:/msys64/mingw64/bin/avutil-59.dll
-            C:/msys64/mingw64/bin/swscale-8.dll
-            C:/msys64/mingw64/bin/SDL2.dll
+          name: scrcpy-v3.3.1-客户端
+          path: output/*
