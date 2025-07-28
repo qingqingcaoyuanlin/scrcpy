@@ -1,4 +1,4 @@
-name: Build scrcpy.exe
+name: Build scrcpy v3.3.1
 
 on:
   push:
@@ -24,6 +24,7 @@ jobs:
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-ffmpeg
             mingw-w64-x86_64-libusb
+            mingw-w64-x86_64-pkgconf
 
       - name: 验证工具是否安装成功
         shell: msys2 {0}
@@ -32,23 +33,26 @@ jobs:
           ninja --version
           gcc --version
           pkg-config --modversion libusb-1.0
+          pkg-config --modversion libavcodec
 
-      - name: 拉取scrcpy源码
+      - name: 拉取scrcpy v3.3.1源码
         shell: msys2 {0}
         run: |
           git clone https://github.com/Genymobile/scrcpy.git
           cd scrcpy
-          git checkout v3.3.1
+          git checkout v3.3.1  # 明确使用v3.3.1版本
 
-      - name: 配置编译选项
+      - name: 配置编译选项（仅客户端）
         shell: msys2 {0}
         run: |
           cd scrcpy
           meson setup build --buildtype=release \
-            -Dprebuilt_server=false \
-            -Dbuild_server=false \
-            -Dffmpeg=system \
-            -Dlibusb=system
+            -Dprebuilt_server=false \  # 不使用预编译服务器
+            -Dbuild_server=false \    # 不编译服务器端
+            -Dwith_ffmpeg=enabled \   # 启用FFmpeg
+            -Dwith_libusb=enabled \   # 启用libusb
+            -Dwith_sdl=disabled \     # 禁用SDL（可选，减少依赖）
+            -Dwith_systemd=disabled   # 禁用systemd（Windows不需要）
 
       - name: 编译scrcpy.exe
         shell: msys2 {0}
@@ -56,10 +60,21 @@ jobs:
           cd scrcpy
           ninja -C build
 
+      - name: 验证编译结果
+        shell: msys2 {0}
+        run: |
+          cd scrcpy/build/src
+          file scrcpy.exe  # 检查文件类型
+          ldd scrcpy.exe   # 列出依赖项
+
       - name: 上传产物
         uses: actions/upload-artifact@v4
         with:
-          name: scrcpy-exe
+          name: scrcpy-v3.3.1
           path: |
             scrcpy/build/src/scrcpy.exe
             C:/msys64/mingw64/bin/libusb-1.0.dll
+            C:/msys64/mingw64/bin/avcodec-60.dll
+            C:/msys64/mingw64/bin/avformat-60.dll
+            C:/msys64/mingw64/bin/avutil-58.dll
+            C:/msys64/mingw64/bin/swscale-7.dll
