@@ -2,56 +2,50 @@ name: Build scrcpy.exe
 
 on:
   push:
-    branches: [ main ]  # 触发条件：推送到main分支时执行
+    branches: [ main ]
   pull_request:
     branches: [ main ]
-  workflow_dispatch:  # 允许手动触发编译
+  workflow_dispatch:
 
 jobs:
   build-windows:
-    runs-on: windows-latest  # 使用Windows系统的云服务器
+    runs-on: windows-latest
     
     steps:
       - name: 检查系统环境
         run: |
           echo "Windows版本：$env:OS"
-          gcc --version  # 验证默认安装的MinGW（若未安装，后续步骤会补充）
+          gcc --version
 
       - name: 安装依赖工具
         run: |
-          # 安装Chocolatey（Windows包管理器）
           Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
-          
-          # 安装编译工具：meson（构建系统）、ninja（编译工具）、MinGW（C编译器）
           choco install -y meson ninja mingw
-          
-          # 安装依赖库：FFmpeg（静态库，用于视频处理）、libusb（USB通信）
-          choco install -y ffmpeg-full --version=5.1.2  # 固定版本避免兼容性问题
+          choco install -y ffmpeg-full --version=5.1.2
           choco install -y libusb --version=1.0.26
 
       - name: 拉取scrcpy源码
         run: |
           git clone https://github.com/Genymobile/scrcpy.git
           cd scrcpy
-          git checkout v2.4  # 选择稳定版本（可替换为最新版本号，如v2.5）
+          git checkout v2.4  # 可替换为最新版本
 
       - name: 配置编译选项（仅客户端）
         run: |
           cd scrcpy
-          # 创建编译目录
           meson setup build --buildtype=release `
-            -Dprebuilt_server=false `  # 不编译Android服务器端
-            -Dbuild_server=false `      # 禁用服务器端构建
-            -Dffmpeg=system `           # 使用系统安装的FFmpeg
-            -Dlibusb=system             # 使用系统安装的libusb
+            -Dprebuilt_server=false `
+            -Dbuild_server=false `
+            -Dffmpeg=system `
+            -Dlibusb=system
 
       - name: 编译scrcpy.exe
         run: |
           cd scrcpy
-          ninja -C build  # 执行编译，输出到build/src目录
+          ninja -C build
 
       - name: 上传scrcpy.exe作为产物
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4  # 关键修改：从v3升级到v4
         with:
           name: scrcpy-exe
-          path: scrcpy/build/src/scrcpy.exe  # 编译生成的exe路径
+          path: scrcpy/build/src/scrcpy.exe
