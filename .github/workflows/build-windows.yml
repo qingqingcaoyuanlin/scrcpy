@@ -87,7 +87,7 @@ jobs:
           ninja -C build
           
           # 确认exe生成
-          if [ ! -f "build/src/scrcpy.exe" ]; then
+          if [ ! -f "app/scrcpy.exe" ]; then
             echo "编译失败，无exe文件"
             #exit 1
           fi
@@ -96,7 +96,7 @@ jobs:
         shell: msys2 {0}
         run: |
           mkdir -p output
-          cp scrcpy/build/src/scrcpy.exe output/
+          cp app/scrcpy.exe output/
           cp /mingw64/bin/libusb-1.0.dll output/
           cp /mingw64/bin/avcodec-61.dll output/
           cp /mingw64/bin/avformat-61.dll output/
