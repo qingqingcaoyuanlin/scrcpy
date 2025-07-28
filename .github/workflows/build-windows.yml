@@ -25,6 +25,7 @@ jobs:
             mingw-w64-x86_64-ffmpeg
             mingw-w64-x86_64-libusb
             mingw-w64-x86_64-pkgconf
+            mingw-w64-x86_64-SDL2  # 补充SDL2依赖（v3.3.1可能需要）
 
       - name: 验证工具是否安装成功
         shell: msys2 {0}
@@ -33,7 +34,7 @@ jobs:
           ninja --version
           gcc --version
           pkg-config --modversion libusb-1.0
-          pkg-config --modversion libavcodec
+          pkg-config --modversion sdl2
 
       - name: 拉取scrcpy v3.3.1源码
         shell: msys2 {0}
@@ -46,26 +47,27 @@ jobs:
         shell: msys2 {0}
         run: |
           cd scrcpy
+          # 关键修改：移除 -Dbackend=none，改用官方禁用服务器的选项
           meson setup build --buildtype=release \
-            -Dbackend=none \            # 关键修改：禁用服务器后端
-            -Dprebuilt_server=false \  # 不使用预编译服务器
-            -Dwith_ffmpeg=enabled \    # 启用FFmpeg
-            -Dwith_libusb=enabled \    # 启用libusb
-            -Dwith_sdl=disabled \      # 禁用SDL（可选）
-            -Dwith_systemd=disabled    # 禁用systemd
+            -Dbuild_server=false \      # 禁用服务器端编译（scrcpy的官方选项）
+            -Dprebuilt_server=false \   # 不使用预编译服务器
+            -Dwith_ffmpeg=enabled \     # 启用FFmpeg
+            -Dwith_libusb=enabled \     # 启用libusb
+            -Dwith_sdl=enabled \        # 启用SDL（v3.3.1依赖SDL显示窗口）
+            -Dwith_systemd=disabled     # 禁用systemd（Windows不需要）
 
       - name: 编译scrcpy.exe
         shell: msys2 {0}
         run: |
           cd scrcpy
-          ninja -C build
+          ninja -C build  # 使用ninja后端编译
 
       - name: 验证编译结果
         shell: msys2 {0}
         run: |
           cd scrcpy/build/src
           file scrcpy.exe
-          ldd scrcpy.exe
+          ldd scrcpy.exe  # 检查依赖是否完整
 
       - name: 上传产物
         uses: actions/upload-artifact@v4
@@ -78,3 +80,4 @@ jobs:
             C:/msys64/mingw64/bin/avformat-61.dll
             C:/msys64/mingw64/bin/avutil-59.dll
             C:/msys64/mingw64/bin/swscale-8.dll
+            C:/msys64/mingw64/bin/SDL2.dll  # 补充SDL2依赖
