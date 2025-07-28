@@ -40,19 +40,19 @@ jobs:
         run: |
           git clone https://github.com/Genymobile/scrcpy.git
           cd scrcpy
-          git checkout v3.3.1  # 明确使用v3.3.1版本
+          git checkout v3.3.1
 
       - name: 配置编译选项（仅客户端）
         shell: msys2 {0}
         run: |
           cd scrcpy
           meson setup build --buildtype=release \
+            -Dbackend=none \            # 关键修改：禁用服务器后端
             -Dprebuilt_server=false \  # 不使用预编译服务器
-            -Dbuild_server=false \    # 不编译服务器端
-            -Dwith_ffmpeg=enabled \   # 启用FFmpeg
-            -Dwith_libusb=enabled \   # 启用libusb
-            -Dwith_sdl=disabled \     # 禁用SDL（可选，减少依赖）
-            -Dwith_systemd=disabled   # 禁用systemd（Windows不需要）
+            -Dwith_ffmpeg=enabled \    # 启用FFmpeg
+            -Dwith_libusb=enabled \    # 启用libusb
+            -Dwith_sdl=disabled \      # 禁用SDL（可选）
+            -Dwith_systemd=disabled    # 禁用systemd
 
       - name: 编译scrcpy.exe
         shell: msys2 {0}
@@ -64,8 +64,8 @@ jobs:
         shell: msys2 {0}
         run: |
           cd scrcpy/build/src
-          file scrcpy.exe  # 检查文件类型
-          ldd scrcpy.exe   # 列出依赖项
+          file scrcpy.exe
+          ldd scrcpy.exe
 
       - name: 上传产物
         uses: actions/upload-artifact@v4
@@ -74,7 +74,7 @@ jobs:
           path: |
             scrcpy/build/src/scrcpy.exe
             C:/msys64/mingw64/bin/libusb-1.0.dll
-            C:/msys64/mingw64/bin/avcodec-60.dll
-            C:/msys64/mingw64/bin/avformat-60.dll
-            C:/msys64/mingw64/bin/avutil-58.dll
-            C:/msys64/mingw64/bin/swscale-7.dll
+            C:/msys64/mingw64/bin/avcodec-61.dll
+            C:/msys64/mingw64/bin/avformat-61.dll
+            C:/msys64/mingw64/bin/avutil-59.dll
+            C:/msys64/mingw64/bin/swscale-8.dll
