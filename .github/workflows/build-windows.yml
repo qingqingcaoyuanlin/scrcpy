@@ -12,70 +12,54 @@ jobs:
     runs-on: windows-latest
     
     steps:
-      - name: 检查系统环境
-        run: |
-          echo "Windows版本：$env:OS"
-          gcc --version
-
-      - name: 安装依赖工具
-        run: |
-          # 安装Chocolatey
-          Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
-          
-          # 安装编译工具（meson、ninja、mingw）
-          choco install -y meson ninja mingw
-          choco install -y ffmpeg-full --version=5.1.2
-
-          # 关键修复：手动添加meson和ninja的安装路径到环境变量
-          # Chocolatey默认安装路径为C:\ProgramData\chocolatey\bin
-          echo "C:\ProgramData\chocolatey\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - name: 安装MSYS2和编译工具
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            git
+            mingw-w64-x86_64-meson
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-ffmpeg
+            mingw-w64-x86_64-libusb
 
       - name: 验证工具是否安装成功
+        shell: msys2 {0}
         run: |
-          meson --version  # 验证meson是否可用
-          ninja --version  # 验证ninja是否可用
-
-      - name: 手动安装libusb
-        run: |
-          mkdir C:\libusb
-          cd C:\libusb
-          
-          # 下载libusb 1.0.26（官方稳定版）
-          Invoke-WebRequest -Uri "https://github.com/libusb/libusb/releases/download/v1.0.26/libusb-1.0.26.7z" -OutFile "libusb.7z"
-          
-          # 安装7-Zip并解压
-          choco install -y 7zip
-          & 'C:\Program Files\7-Zip\7z.exe' x "libusb.7z" -oC:\libusb
-          
-          # 添加libusb到环境变量（头文件和库文件路径）
-          echo "C:\libusb\libusb-1.0.26\MinGW64\include" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          echo "C:\libusb\libusb-1.0.26\MinGW64\lib" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          echo "C:\libusb\libusb-1.0.26\MinGW64\dll" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          meson --version
+          ninja --version
+          gcc --version
+          pkg-config --modversion libusb-1.0
 
       - name: 拉取scrcpy源码
+        shell: msys2 {0}
         run: |
           git clone https://github.com/Genymobile/scrcpy.git
           cd scrcpy
-          git checkout v3.3.1  # 可替换为最新版本（如v2.5）
+          git checkout v2.4
 
-      - name: 配置编译选项（仅客户端）
+      - name: 配置编译选项
+        shell: msys2 {0}
         run: |
           cd scrcpy
-          meson setup build --buildtype=release `
-            -Dprebuilt_server=false `
-            -Dbuild_server=false `
-            -Dffmpeg=system `
-            -Dlibusb=enabled  # 使用手动安装的libusb
+          meson setup build --buildtype=release \
+            -Dprebuilt_server=false \
+            -Dbuild_server=false \
+            -Dffmpeg=system \
+            -Dlibusb=system
 
       - name: 编译scrcpy.exe
+        shell: msys2 {0}
         run: |
           cd scrcpy
-          ninja -C build  # 执行编译
+          ninja -C build
 
-      - name: 上传产物（包含依赖DLL）
+      - name: 上传产物
         uses: actions/upload-artifact@v4
         with:
           name: scrcpy-exe
           path: |
             scrcpy/build/src/scrcpy.exe
-            C:\libusb\libusb-1.0.26\MinGW64\dll\libusb-1.0.dll  # 必需的运行时依赖
+            C:/msys64/mingw64/bin/libusb-1.0.dll
