@@ -78,12 +78,13 @@ jobs:
         run: |
           cd scrcpy
           meson setup build --buildtype=release \
-            -Dffmpeg=enabled \
-            -Dlibusb=enabled \
-            -Dsdl=enabled \
-            -Dsystemd=disabled
+            -Ddeps_ffmpeg=enabled \ 
+            -Ddeps_libusb=enabled \
+            -Ddeps_sdl2=enabled \ 
+            -Dwith_systemd=disabled \
+            -Dprebuilt_server=false
 
-      - name: 编译客户端
+      - name: 编译scrcpy.exe
         shell: msys2 {0}
         run: |
           cd scrcpy
