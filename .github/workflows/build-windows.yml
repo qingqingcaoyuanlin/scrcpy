@@ -38,7 +38,7 @@ jobs:
         run: |
           git clone https://github.com/Genymobile/scrcpy.git
           cd scrcpy
-          git checkout v2.4
+          git checkout v3.3.1
 
       - name: 配置编译选项
         shell: msys2 {0}
