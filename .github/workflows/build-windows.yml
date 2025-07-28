@@ -24,10 +24,24 @@ jobs:
           
           # 安装编译工具
           choco install -y meson ninja mingw
-          
-          # 安装依赖库（不指定libusb版本，使用最新版）
           choco install -y ffmpeg-full --version=5.1.2
-          choco install -y libusb  # 关键修改：移除版本号，安装最新版
+
+      - name: 手动安装libusb
+        run: |
+          # 创建临时目录
+          mkdir C:\libusb
+          cd C:\libusb
+          
+          # 从GitHub下载libusb预编译库
+          Invoke-WebRequest -Uri "https://github.com/libusb/libusb/releases/download/v1.0.26/libusb-1.0.26.7z" -OutFile "libusb.7z"
+          
+          # 解压7z文件（需要安装7-Zip）
+          choco install -y 7zip
+          & 'C:\Program Files\7-Zip\7z.exe' x "libusb.7z" -oC:\libusb
+          
+          # 设置环境变量，让meson找到libusb
+          echo "C:\libusb\libusb-1.0.26\MinGW64\dll" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          echo "C:\libusb\libusb-1.0.26\MinGW64\include" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: 拉取scrcpy源码
         run: |
@@ -42,7 +56,7 @@ jobs:
             -Dprebuilt_server=false `
             -Dbuild_server=false `
             -Dffmpeg=system `
-            -Dlibusb=system
+            -Dlibusb=enabled  # 启用libusb
 
       - name: 编译scrcpy.exe
         run: |
@@ -53,4 +67,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: scrcpy-exe
-          path: scrcpy/build/src/scrcpy.exe
+          path: |
+            scrcpy/build/src/scrcpy.exe
+            C:\libusb\libusb-1.0.26\MinGW64\dll\libusb-1.0.dll  # 同时上传依赖的DLL
