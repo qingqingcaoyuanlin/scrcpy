@@ -1,105 +1,57 @@
-name: Build scrcpy for Windows
+name: Build scrcpy.exe
 
 on:
-  workflow_dispatch:
   push:
-    branches:
-      - master
+    branches: [ main ]  # 触发条件：推送到main分支时执行
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:  # 允许手动触发编译
 
 jobs:
-  build:
-    runs-on: windows-latest
-
+  build-windows:
+    runs-on: windows-latest  # 使用Windows系统的云服务器
+    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          repository: Genymobile/scrcpy
-          ref: master
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.9'
-
-      - name: Install MSYS2
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: MINGW64
-          update: true
-          install: >
-            base-devel
-            mingw-w64-x86_64-toolchain
-            mingw-w64-x86_64-meson
-            mingw-w64-x86_64-ninja
-            mingw-w64-x86_64-SDL2
-            mingw-w64-x86_64-libusb
-            mingw-w64-x86_64-ffmpeg
-            unzip
-
-      - name: Set up JDK 17  # 升级到 Java 17
-        uses: actions/setup-java@v3
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-          cache: 'gradle'
-          java-package: jdk
-          architecture: x64
-
-      - name: Install Android SDK Command-line Tools
-        shell: pwsh
+      - name: 检查系统环境
         run: |
-          # 创建Android SDK目录
-          New-Item -ItemType Directory -Force -Path "$env:ANDROID_HOME/cmdline-tools"
-          Set-Location "$env:ANDROID_HOME/cmdline-tools"
-          
-          # 下载最新的命令行工具
-          $url = "https://dl.google.com/android/repository/commandlinetools-win-10406996_latest.zip"
-          $output = "cmdline-tools.zip"
-          Invoke-WebRequest -Uri $url -OutFile $output
-          
-          # 解压文件
-          Expand-Archive -Path $output -DestinationPath . -Force
-          Move-Item -Path "cmdline-tools" -Destination "latest" -Force
-          
-          # 接受许可证（循环输出多个y以确保所有许可证都被接受）
-          for ($i=0; $i -lt 10; $i++) { Write-Output "y" } | & "$env:ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager.bat" --licenses
-          
-          # 安装所需组件
-          Write-Output "y" | & "$env:ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager.bat" "ndk;25.2.9519653" "platform-tools" "build-tools;33.0.2"
-        env:
-          ANDROID_HOME: ${{ runner.tool_cache }}/android-sdk
+          echo "Windows版本：$env:OS"
+          gcc --version  # 验证默认安装的MinGW（若未安装，后续步骤会补充）
 
-      - name: Build server
-        shell: msys2 {0}
+      - name: 安装依赖工具
         run: |
-          cd app
-          ./gradlew assembleDebug
-          cd ..
-        env:
-          ANDROID_HOME: ${{ runner.tool_cache }}/android-sdk
+          # 安装Chocolatey（Windows包管理器）
+          Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+          
+          # 安装编译工具：meson（构建系统）、ninja（编译工具）、MinGW（C编译器）
+          choco install -y meson ninja mingw
+          
+          # 安装依赖库：FFmpeg（静态库，用于视频处理）、libusb（USB通信）
+          choco install -y ffmpeg-full --version=5.1.2  # 固定版本避免兼容性问题
+          choco install -y libusb --version=1.0.26
 
-      - name: Build client
-        shell: msys2 {0}
+      - name: 拉取scrcpy源码
         run: |
-          export PATH="/mingw64/bin:$PATH"
-          export ANDROID_NDK_HOME="${{ runner.tool_cache }}/android-sdk/ndk/25.2.9519653"
-          meson setup build --cross-file scripts/mingw64.txt --buildtype=release
-          ninja -C build
-        env:
-          ANDROID_HOME: ${{ runner.tool_cache }}/android-sdk
+          git clone https://github.com/Genymobile/scrcpy.git
+          cd scrcpy
+          git checkout v2.4  # 选择稳定版本（可替换为最新版本号，如v2.5）
 
-      - name: Collect artifacts
-        shell: msys2 {0}
+      - name: 配置编译选项（仅客户端）
         run: |
-          mkdir -p dist
-          cp build/scrcpy.exe dist/
-          cp app/build/outputs/apk/debug/app-debug.jar dist/scrcpy-server.jar
-          cp /mingw64/bin/*.dll dist/
+          cd scrcpy
+          # 创建编译目录
+          meson setup build --buildtype=release `
+            -Dprebuilt_server=false `  # 不编译Android服务器端
+            -Dbuild_server=false `      # 禁用服务器端构建
+            -Dffmpeg=system `           # 使用系统安装的FFmpeg
+            -Dlibusb=system             # 使用系统安装的libusb
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+      - name: 编译scrcpy.exe
+        run: |
+          cd scrcpy
+          ninja -C build  # 执行编译，输出到build/src目录
+
+      - name: 上传scrcpy.exe作为产物
+        uses: actions/upload-artifact@v3
         with:
-          name: scrcpy-windows-build
-          path: dist/
-          retention-days: 7
+          name: scrcpy-exe
+          path: scrcpy/build/src/scrcpy.exe  # 编译生成的exe路径
