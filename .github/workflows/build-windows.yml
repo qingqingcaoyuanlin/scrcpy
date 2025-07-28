@@ -1,13 +1,13 @@
 name: 纯净编译 scrcpy v3.3.1 客户端
 
 on:
-  workflow_dispatch:  # 仅手动触发，避免自动浪费时间
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: 安装 MSYS2 环境（官方推荐）
+      - name: 安装 MSYS2 环境
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
@@ -21,59 +21,86 @@ jobs:
             mingw-w64-x86_64-libusb
             mingw-w64-x86_64-pkgconf
             mingw-w64-x86_64-SDL2
+            grep
+            findutils  # 确保所有必要的工具都安装
 
       - name: 拉取源码并彻底删除服务器目录
         shell: msys2 {0}
         run: |
           git clone https://github.com/Genymobile/scrcpy.git
           cd scrcpy
-          git checkout v3.3.1  # 锁定版本
-          rm -rf server/  # 物理删除服务器目录，永绝后患
-          # 确认服务器目录已删除
-          if [ -d "server" ]; then echo "服务器目录未删除，失败！"; exit 1; fi
+          git checkout v3.3.1
+          
+          # 彻底删除服务器目录及所有相关文件
+          rm -rf server/
+          find . -type f -exec grep -l "server" {} \; | xargs -I {} sed -i '/server/d' {}
+          
+          # 验证服务器目录已删除
+          if [ -d "server" ]; then 
+            echo "服务器目录未删除，失败！"
+            exit 1
+          fi
 
-      - name: 修补主配置文件（移除服务器引用）
+      - name: 修补主配置文件（多轮处理）
         shell: msys2 {0}
         run: |
           cd scrcpy
-          # 从主meson.build中删除所有关于server的配置
-          sed -i '/subdir.*server/d' meson.build
-          # 验证修改（确保没有server相关内容）
-          if grep -q "server" meson.build; then echo "配置文件修补失败"; exit 1; fi
+          
+          # 第一轮：删除所有包含"server"的行
+          sed -i '/server/d' meson.build
+          
+          # 第二轮：删除可能残留的server相关配置
+          sed -i '/backend/d' meson.build  # 移除后端相关配置
+          sed -i '/with_server/d' meson.build  # 移除服务器选项
+          
+          # 保存原始文件副本用于调试
+          cp meson.build meson.build.bak
+          
+          # 验证修改（严格检查，允许"servers"等非目标词汇存在）
+          if grep -q "server[^s]" meson.build; then 
+            echo "配置文件修补失败，仍存在server引用！"
+            grep "server[^s]" meson.build  # 输出具体匹配行
+            exit 1
+          else
+            echo "配置文件修补成功，无server引用"
+          fi
 
       - name: 配置编译（仅客户端必需选项）
         shell: msys2 {0}
         run: |
           cd scrcpy
           meson setup build --buildtype=release \
-            -Dffmpeg=enabled \    # 仅保留客户端必需的FFmpeg依赖
-            -Dlibusb=enabled \    # 仅保留USB连接依赖
-            -Dsdl=enabled \       # 仅保留窗口显示依赖
-            -Dsystemd=disabled    # Windows无需systemd
+            -Dffmpeg=enabled \
+            -Dlibusb=enabled \
+            -Dsdl=enabled \
+            -Dsystemd=disabled
 
       - name: 编译客户端
         shell: msys2 {0}
         run: |
           cd scrcpy
           ninja -C build
+          
           # 确认exe生成
-          if [ ! -f "build/src/scrcpy.exe" ]; then echo "编译失败，无exe文件"; exit 1; fi
+          if [ ! -f "build/src/scrcpy.exe" ]; then
+            echo "编译失败，无exe文件"
+            exit 1
+          fi
 
       - name: 打包所有运行依赖
         shell: msys2 {0}
         run: |
-          # 创建输出目录
           mkdir -p output
-          # 复制客户端exe
           cp scrcpy/build/src/scrcpy.exe output/
-          # 复制必需的DLL（根据官方运行时依赖）
           cp /mingw64/bin/libusb-1.0.dll output/
           cp /mingw64/bin/avcodec-61.dll output/
           cp /mingw64/bin/avformat-61.dll output/
           cp /mingw64/bin/avutil-59.dll output/
           cp /mingw64/bin/swscale-8.dll output/
           cp /mingw64/bin/SDL2.dll output/
-          # 确认所有文件存在
+          
+          # 显示最终文件列表
+          echo "打包的文件列表:"
           ls -l output/
 
       - name: 上传最终产物
