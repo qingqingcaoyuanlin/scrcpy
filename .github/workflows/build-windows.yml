@@ -31,9 +31,8 @@ jobs:
           cd scrcpy
           git checkout v3.3.1
           
-          # 彻底删除服务器目录及所有相关文件
+          # 彻底删除服务器目录
           rm -rf server/
-          find . -type f -exec grep -l "server" {} \; | xargs -I {} sed -i '/server/d' {}
           
           # 验证服务器目录已删除
           if [ -d "server" ]; then 
@@ -41,29 +40,38 @@ jobs:
             exit 1
           fi
 
-      - name: 修补主配置文件（多轮处理）
+      - name: 智能修补主配置文件
         shell: msys2 {0}
         run: |
           cd scrcpy
           
-          # 第一轮：删除所有包含"server"的行
-          sed -i '/server/d' meson.build
+          # 创建临时文件用于处理
+          cp meson.build meson.build.tmp
           
-          # 第二轮：删除可能残留的server相关配置
-          sed -i '/backend/d' meson.build  # 移除后端相关配置
-          sed -i '/with_server/d' meson.build  # 移除服务器选项
+          # 1. 删除所有直接引用server的行
+          sed -i '/subdir.*server/d' meson.build.tmp
           
-          # 保存原始文件副本用于调试
-          cp meson.build meson.build.bak
+          # 2. 智能处理条件语句：删除包含server的if块
+          # 使用awk识别完整的if-endif块
+          awk '/^if.*server/{f=1} !f; /^endif/{f=0}' meson.build.tmp > meson.build.new
           
-          # 验证修改（严格检查，允许"servers"等非目标词汇存在）
+          # 3. 再次清理残留的server引用
+          sed -i '/server/d' meson.build.new
+          
+          # 4. 使用新文件替换原文件
+          mv meson.build.new meson.build
+          
+          # 5. 验证修改
           if grep -q "server[^s]" meson.build; then 
             echo "配置文件修补失败，仍存在server引用！"
-            grep "server[^s]" meson.build  # 输出具体匹配行
+            grep "server[^s]" meson.build
             exit 1
           else
             echo "配置文件修补成功，无server引用"
           fi
+          
+          # 保存处理后的文件用于调试
+          cp meson.build meson.build.debug
 
       - name: 配置编译（仅客户端必需选项）
         shell: msys2 {0}
