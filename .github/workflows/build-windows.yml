@@ -78,10 +78,6 @@ jobs:
         run: |
           cd scrcpy
           meson setup build --buildtype=release \
-            -Ddeps_ffmpeg=enabled \ 
-            -Ddeps_libusb=enabled \
-            -Ddeps_sdl2=enabled \ 
-            -Dwith_systemd=disabled \
             -Dprebuilt_server=false
 
       - name: 编译scrcpy.exe
