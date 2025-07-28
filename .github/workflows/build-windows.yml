@@ -19,10 +19,15 @@ jobs:
 
       - name: 安装依赖工具
         run: |
+          # 安装Chocolatey
           Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+          
+          # 安装编译工具
           choco install -y meson ninja mingw
+          
+          # 安装依赖库（不指定libusb版本，使用最新版）
           choco install -y ffmpeg-full --version=5.1.2
-          choco install -y libusb --version=1.0.26
+          choco install -y libusb  # 关键修改：移除版本号，安装最新版
 
       - name: 拉取scrcpy源码
         run: |
@@ -45,7 +50,7 @@ jobs:
           ninja -C build
 
       - name: 上传scrcpy.exe作为产物
-        uses: actions/upload-artifact@v4  # 关键修改：从v3升级到v4
+        uses: actions/upload-artifact@v4
         with:
           name: scrcpy-exe
           path: scrcpy/build/src/scrcpy.exe
