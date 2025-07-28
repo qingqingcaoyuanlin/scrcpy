@@ -22,7 +22,7 @@ jobs:
             mingw-w64-x86_64-pkgconf
             mingw-w64-x86_64-SDL2
             grep
-            findutils  # 确保所有必要的工具都安装
+            findutils
 
       - name: 拉取源码并彻底删除服务器目录
         shell: msys2 {0}
