@@ -25,7 +25,7 @@ jobs:
             mingw-w64-x86_64-ffmpeg
             mingw-w64-x86_64-libusb
             mingw-w64-x86_64-pkgconf
-            mingw-w64-x86_64-SDL2  # 补充SDL2依赖（v3.3.1可能需要）
+            mingw-w64-x86_64-SDL2
 
       - name: 验证工具是否安装成功
         shell: msys2 {0}
