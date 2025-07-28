@@ -49,7 +49,6 @@ jobs:
           cd scrcpy
           # 关键修改：移除 -Dbackend=none，改用官方禁用服务器的选项
           meson setup build --buildtype=release \
-            -Dbuild_server=false \      # 禁用服务器端编译（scrcpy的官方选项）
             -Dprebuilt_server=false \   # 不使用预编译服务器
             -Dwith_ffmpeg=enabled \     # 启用FFmpeg
             -Dwith_libusb=enabled \     # 启用libusb
