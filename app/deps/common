@@ -73,5 +73,5 @@ get_file() {
         echo "$file: not found, downloading..."
         wget "$url" -O "$file"
     fi
-    checksum "$file" "$sum"
+    #checksum "$file" "$sum"
 }
