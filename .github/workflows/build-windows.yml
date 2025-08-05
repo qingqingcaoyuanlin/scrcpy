@@ -1,4 +1,4 @@
-name: 纯净编译 scrcpy v3.3.1 客户端
+name: Build scrcpy for Windows
 
 on:
   workflow_dispatch:
@@ -6,110 +6,98 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+
     steps:
-      - name: 安装 MSYS2 环境
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: MINGW64
-          update: true
-          install: >-
-            git
-            mingw-w64-x86_64-meson
-            mingw-w64-x86_64-ninja
-            mingw-w64-x86_64-gcc
-            mingw-w64-x86_64-ffmpeg
-            mingw-w64-x86_64-libusb
-            mingw-w64-x86_64-pkgconf
-            mingw-w64-x86_64-SDL2
-            grep
-            findutils
+    - name: Checkout code
+      uses: actions/checkout@v3
 
-      - name: 拉取源码并彻底删除服务器目录
-        shell: msys2 {0}
-        run: |
-          git clone https://github.com/Genymobile/scrcpy.git
-          cd scrcpy
-          git checkout v3.3.1
-          
-          # 彻底删除服务器目录
-          rm -rf server/
-          
-          # 验证服务器目录已删除
-          if [ -d "server" ]; then 
-            echo "服务器目录未删除，失败！"
-            exit 1
-          fi
+    - name: Setup MSYS2
+      uses: msys2/setup-msys2@v2
+      with:
+        update: true
+        install: >-
+          mingw-w64-x86_64-toolchain
+          meson
+          git
+          mingw-w64-x86_64-SDL2
+          mingw-w64-x86_64-ffmpeg
+          mingw-w64-x86_64-libva
+          mingw-w64-x86_64-libdrm
+          make
 
-      - name: 智能修补主配置文件
-        shell: msys2 {0}
-        run: |
-          cd scrcpy
-          
-          # 创建临时文件用于处理
-          cp meson.build meson.build.tmp
-          
-          # 1. 删除所有直接引用server的行
-          sed -i '/subdir.*server/d' meson.build.tmp
-          
-          # 2. 智能处理条件语句：删除包含server的if块
-          # 使用awk识别完整的if-endif块
-          awk '/^if.*server/{f=1} !f; /^endif/{f=0}' meson.build.tmp > meson.build.new
-          
-          # 3. 再次清理残留的server引用
-          sed -i '/server/d' meson.build.new
-          
-          # 4. 使用新文件替换原文件
-          mv meson.build.new meson.build
-          
-          # 5. 验证修改
-          if grep -q "server[^s]" meson.build; then 
-            echo "配置文件修补失败，仍存在server引用！"
-            grep "server[^s]" meson.build
-            exit 1
-          else
-            echo "配置文件修补成功，无server引用"
-          fi
-          
-          # 保存处理后的文件用于调试
-          cp meson.build meson.build.debug
+    - name: Download scrcpy-server
+      run: |
+        # 这里下载最新版本的scrcpy-server，但需要知道最新版本号
+        # 我们可以从scrcpy的GitHub release获取最新版本
+        # 使用GitHub API获取最新版本
+        $version = (Invoke-RestMethod -Uri "https://api.github.com/repos/Genymobile/scrcpy/releases/latest")
+        # 去掉v前缀
+        $version = $version -replace 'v', ''
+        $url = "https://github.com/Genymobile/scrcpy/releases/download/v$version/scrcpy-server-v$version"
+        # 下载到当前目录
+        Invoke-WebRequest -Uri $url -OutFile scrcpy-server
+        # 将下载的文件移动到后续步骤需要的位置
+        mkdir -p scrcpy-server
+        mv scrcpy-server scrcpy-server/
+      shell: powershell
 
-      - name: 配置编译（仅客户端必需选项）
-        shell: msys2 {0}
-        run: |
-          cd scrcpy
-          meson setup build --buildtype=release \
-            -Dprebuilt_server=false
+    - name: Clone scrcpy source
+      run: |
+        git clone https://github.com/Genymobile/scrcpy.git
+        cd scrcpy
+        # 切换到最新标签（与下载的server版本一致）
+        git checkout ${{ github.event.release.tag_name }}  # 注意：这里我们无法直接使用上一步的$version，因为环境不同
+        # 但是，上一步的$version是在PowerShell中设置的，这一步是在bash中，所以我们需要重新获取
+        # 因此，我们调整：在上一步将版本号写入一个文件，这一步读取
+        # 或者，我们也可以在这一步重新获取最新版本
+        # 这里我们重新获取最新标签
+        latest_tag=$(git describe --tags `git rev-list --tags --max-count=1`)
+        git checkout $latest_tag
+      shell: msys2 {0}
 
-      - name: 编译scrcpy.exe
-        shell: msys2 {0}
-        run: |
-          cd scrcpy
-          ninja -C build
-          
-          # 确认exe生成
-          if [ ! -f "app/scrcpy.exe" ]; then
-            echo "编译失败，无exe文件"
-            #exit 1
-          fi
+    - name: Configure and build
+      run: |
+        cd scrcpy
+        # 将之前下载的scrcpy-server文件放在当前目录下（假设在上一层目录的scrcpy-server目录）
+        cp ../scrcpy-server/scrcpy-server .
+        # 配置
+        meson setup build --buildtype=release --strip -Db_lto=true -Dprebuilt_server=scrcpy-server -Dcrossbuild_windows=true
+        # 编译
+        meson compile -C build
+      shell: msys2 {0}
 
-      - name: 打包所有运行依赖
-        shell: msys2 {0}
-        run: |
-          mkdir -p output
-          cp app/scrcpy.exe output/
-          cp /mingw64/bin/libusb-1.0.dll output/
-          cp /mingw64/bin/avcodec-61.dll output/
-          cp /mingw64/bin/avformat-61.dll output/
-          cp /mingw64/bin/avutil-59.dll output/
-          cp /mingw64/bin/swscale-8.dll output/
-          cp /mingw64/bin/SDL2.dll output/
-          
-          # 显示最终文件列表
-          echo "打包的文件列表:"
-          ls -l output/
+    - name: Copy DLL dependencies
+      run: |
+        cd scrcpy
+        # 将编译生成的exe复制到一个目录（比如dist）
+        mkdir dist
+        cp build/app/scrcpy.exe dist/
+        # 复制依赖的dll
+        # 使用ldd查看依赖，然后从MSYS2的mingw64/bin中复制
+        # 注意：在MSYS2环境中，ldd可能不直接可用，我们可以使用ntldd（在mingw-w64-x86_64-toolchain中有一个ntldd？）
+        # 实际上，我们可以使用`which scrcpy.exe`来查看，但这里我们直接复制已知的dll
+        # 已知的dll：SDL2.dll, avcodec-59.dll, avformat-59.dll, avutil-57.dll, swresample-4.dll, swscale-6.dll等（版本号可能变化）
+        # 我们可以从/mingw64/bin/复制
+        # 使用ldd命令列出依赖
+        # 先进入dist目录，然后执行
+        cd dist
+        dlls=$(ldd scrcpy.exe | grep -i '/mingw64/bin/' | awk '{print $3}')
+        for dll in $dlls; do
+          cp "$dll" .
+        done
+      shell: msys2 {0}
 
-      - name: 上传最终产物
-        uses: actions/upload-artifact@v4
-        with:
-          name: scrcpy-v3.3.1-客户端
-          path: output/*
+    - name: Archive binaries
+      run: |
+        cd scrcpy/dist
+        # 打包
+        zip -r scrcpy-windows.zip .
+        # 将zip文件移动到工作目录，以便上传
+        mv scrcpy-windows.zip ${{ github.workspace }}/
+      shell: msys2 {0}
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: scrcpy-windows
+        path: scrcpy-windows.zip
