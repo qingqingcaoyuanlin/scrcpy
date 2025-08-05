@@ -47,7 +47,6 @@ jobs:
   
   package-win64:
     needs:
-      - build-scrcpy-server
       - build-win64
     runs-on: ubuntu-latest
     steps:
