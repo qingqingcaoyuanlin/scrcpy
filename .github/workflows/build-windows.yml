@@ -53,11 +53,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Download scrcpy-server
-        uses: actions/download-artifact@v4
-        with:
-          name: scrcpy-server
-          path: release/work/build-server/server/
+      # - name: Download scrcpy-server
+      #   uses: actions/download-artifact@v4
+      #   with:
+      #     name: scrcpy-server
+      #     path: release/work/build-server/server/
 
       - name: Download build-win64
         uses: actions/download-artifact@v4
@@ -121,8 +121,8 @@ jobs:
 
 
 
-      - name: Package server
-        run: release/package_server.sh
+      # - name: Package server
+      #   run: release/package_server.sh
 
       - name: Generate checksums
         run: release/generate_checksums.sh
